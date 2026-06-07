@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: vendorvibe-db
+    environment:
+      POSTGRES_USER: vendorvibe_user
+      POSTGRES_PASSWORD: vendorvibe_password
+      POSTGRES_DB: vendorvibe
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vendorvibe_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: vendorvibe-backend
+    ports:
+      - "5000:5000"
+    environment:
+      DATABASE_URL: postgresql://vendorvibe_user:vendorvibe_password@db:5432/vendorvibe
+      JWT_SECRET: your-super-secret-jwt-key
+      NODE_ENV: development
+      FRONTEND_URL: http://localhost:5173
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend/src:/app/backend/src
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: vendorvibe-frontend
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: http://localhost:5000
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend/src:/app/frontend/src
+
+volumes:
+  postgres_data:
+
+networks:
+  default:
+    name: vendorvibe-network
